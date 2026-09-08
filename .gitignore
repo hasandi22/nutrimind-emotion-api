@@ -1,0 +1,6 @@
+__pycache__/
+*.pyc
+.env
+emotion_model/
+*.safetensors
+*.pkl
