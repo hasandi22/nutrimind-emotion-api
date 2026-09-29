@@ -1,6 +1,7 @@
+.git
+.gitignore
 __pycache__/
 *.pyc
 .env
-emotion_model/
-*.safetensors
-*.pkl
+hf-cache/
+*.md
