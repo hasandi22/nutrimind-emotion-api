@@ -1,0 +1,66 @@
+name: NutriMind CI/CD
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Check Python syntax
+        run: |
+          python3 -m py_compile app.py
+
+      - name: Configure SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/nutrimind_key
+          chmod 600 ~/.ssh/nutrimind_key
+          ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Copy project to EC2
+        run: |
+          scp -i ~/.ssh/nutrimind_key \
+            app.py \
+            Dockerfile \
+            requirements.txt \
+            .dockerignore \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/nutrimind/"
+
+      - name: Build and deploy Docker container
+        run: |
+          ssh -i ~/.ssh/nutrimind_key \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" << 'EOF'
+
+          set -e
+
+          cd /home/ec2-user/nutrimind
+
+          echo "Building NutriMind Docker image..."
+          sudo docker build -t nutrimind-api .
+
+          echo "Stopping old container..."
+          sudo docker rm -f nutrimind || true
+
+          echo "Starting new container..."
+          sudo docker run -d \
+            --name nutrimind \
+            --restart unless-stopped \
+            -p 80:5000 \
+            nutrimind-api
+
+          echo "Waiting for API..."
+          sleep 10
+
+          echo "Checking API health..."
+          curl -f http://localhost/health
+
+          echo "Deployment successful!"
+
+          EOF
