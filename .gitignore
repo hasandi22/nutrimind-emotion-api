@@ -6,3 +6,5 @@ __pycache__/
 hf-cache/
 *.md
 *.pem
+
+firebase-service-account.json

@@ -8,3 +8,4 @@ joblib
 numpy
 sentencepiece
 huggingface_hub
+firebase-admin

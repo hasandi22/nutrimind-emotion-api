@@ -1,5 +1,8 @@
 import os
 
+import firebase_admin
+from firebase_admin import credentials, firestore
+
 from flask import Flask, request, jsonify
 import torch
 import joblib
@@ -8,6 +11,15 @@ from huggingface_hub import hf_hub_download
 
 app = Flask(__name__)
 
+# ============================================================
+# Firebase Firestore
+# ============================================================
+
+cred = credentials.Certificate("firebase-service-account.json")
+
+firebase_admin.initialize_app(cred)
+
+db = firestore.client()
 
 # ============================================================
 # Hugging Face model
@@ -100,70 +112,78 @@ def predict_emotion(text):
 
 
 # ============================================================
-# Emotion Suggestions
+# Emotion Suggestions from Firestore
 # ============================================================
 
 def get_suggestion(emotion, confidence):
 
-    # If the model is not sufficiently confident,
-    # give a general response instead of a specific suggestion.
+    # Determine which confidence range to use
+    if confidence >= 0.90:
+        confidence_field = "confidence_90"
 
-    if confidence < 0.60:
+    elif confidence >= 0.75:
+        confidence_field = "confidence_75"
+
+    elif confidence >= 0.50:
+        confidence_field = "confidence_50"
+
+    elif confidence >= 0.25:
+        confidence_field = "confidence_25"
+
+    else:
+        confidence_field = "confidence_low"
+
+
+    # Convert emotion to lowercase so it matches
+    # the Firestore document ID
+    emotion = emotion.strip().lower()
+
+
+    # Get the emotion document from Firestore
+    doc_ref = db.collection("suggestions").document(emotion)
+
+    doc = doc_ref.get()
+
+
+    # Check whether the document exists
+    if not doc.exists:
 
         return (
-            "I'm not very sure about your emotion. "
-            "Try expressing more details about how you feel."
+            "Take a moment to check in with yourself.\n"
+            "Give yourself some time to relax and reflect.\n"
+            "Be gentle with yourself and your emotions."
         )
 
 
-    suggestions = {
-
-        "joy":
-            "You're feeling happy 😊 Keep doing things that bring you joy "
-            "and share your positivity with others.",
-
-        "love":
-            "You seem emotionally connected ❤️ Cherish your relationships "
-            "and express gratitude to people you care about.",
-
-        "positive":
-            "You have a positive mindset 🌟 Maintain this energy by "
-            "continuing healthy habits and self-care.",
-
-        "surprise":
-            "You seem surprised 😲 Take a moment to process what's "
-            "happening before reacting.",
-
-        "sadness":
-            "You may be feeling sad 😔 It's okay to feel this way. "
-            "Try talking to someone you trust or doing something comforting.",
-
-        "fear":
-            "You seem anxious or fearful 😟 Try deep breathing, "
-            "grounding exercises, and remind yourself you're safe.",
-
-        "anger":
-            "You seem angry 😡 Take a break, step away from the situation, "
-            "and try calming breathing techniques.",
-
-        "stress":
-            "You appear stressed 😥 Try organizing your thoughts, "
-            "resting, or taking short breaks.",
-
-        "disgust":
-            "You may be feeling discomfort or dislike 🤢 "
-            "Try to distance yourself from the trigger and reset your thoughts.",
-
-        "neutral":
-            "You are emotionally balanced 😐 Stay mindful and keep "
-            "maintaining stability in your daily routine."
-    }
+    data = doc.to_dict()
 
 
-    return suggestions.get(
-        emotion,
-        "Take care of yourself and stay mindful of your emotions."
-    )
+    # Get the three suggestions from the selected
+    # confidence field
+    suggestions = data.get(confidence_field, [])
+
+
+    # Check whether suggestions exist
+    if not suggestions:
+
+        return (
+            "Take a moment to check in with yourself.\n"
+            "Give yourself some time to relax and reflect.\n"
+            "Be gentle with yourself and your emotions."
+        )
+
+
+    # Display all three suggestions
+    formatted_suggestions = []
+
+    for index, suggestion in enumerate(suggestions, start=1):
+
+        formatted_suggestions.append(
+            f"{index}. {suggestion}"
+        )
+
+
+    return "\n".join(formatted_suggestions)
 
 
 # ============================================================
