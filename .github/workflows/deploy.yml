@@ -20,13 +20,8 @@ jobs:
       - name: Configure SSH
         run: |
           mkdir -p ~/.ssh
-
-          echo "${{ secrets.EC2_SSH_KEY_B64 }}" | base64 -d > ~/.ssh/nutrimind_key
-
+          echo "${{ secrets.EC2_SSH_KEY }}" > ~/.ssh/nutrimind_key
           chmod 600 ~/.ssh/nutrimind_key
-
-          ssh-keygen -y -f ~/.ssh/nutrimind_key > /dev/null
-
           ssh-keyscan -H "${{ secrets.EC2_HOST }}" >> ~/.ssh/known_hosts
 
       - name: Copy project to EC2
@@ -37,6 +32,23 @@ jobs:
             requirements.txt \
             .dockerignore \
             "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}:/home/ec2-user/nutrimind/"
+
+      - name: Create Firebase credentials on EC2
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: |
+          ssh -i ~/.ssh/nutrimind_key \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            "mkdir -p /home/ec2-user/nutrimind-secrets"
+
+          printf '%s' "$FIREBASE_SERVICE_ACCOUNT" | \
+            ssh -i ~/.ssh/nutrimind_key \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            "cat > /home/ec2-user/nutrimind-secrets/firebase-service-account.json"
+
+          ssh -i ~/.ssh/nutrimind_key \
+            "${{ secrets.EC2_USER }}@${{ secrets.EC2_HOST }}" \
+            "chmod 600 /home/ec2-user/nutrimind-secrets/firebase-service-account.json"
 
       - name: Build and deploy Docker container
         run: |
@@ -54,10 +66,13 @@ jobs:
           sudo docker rm -f nutrimind || true
 
           echo "Starting new container..."
+
           sudo docker run -d \
             --name nutrimind \
             --restart unless-stopped \
             -p 80:5000 \
+            -e FIREBASE_CREDENTIALS_PATH=/firebase/firebase-service-account.json \
+            -v /home/ec2-user/nutrimind-secrets/firebase-service-account.json:/firebase/firebase-service-account.json:ro \
             nutrimind-api
 
           echo "Waiting for API..."

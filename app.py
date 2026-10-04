@@ -15,7 +15,21 @@ app = Flask(__name__)
 # Firebase Firestore
 # ============================================================
 
-cred = credentials.Certificate("firebase-service-account.json")
+# cred = credentials.Certificate("firebase-service-account.json")
+
+# firebase_admin.initialize_app(cred)
+
+# db = firestore.client()
+# ============================================================
+# Firebase Firestore
+# ============================================================
+
+FIREBASE_CREDENTIALS_PATH = os.getenv(
+    "FIREBASE_CREDENTIALS_PATH",
+    "firebase-service-account.json"
+)
+
+cred = credentials.Certificate(FIREBASE_CREDENTIALS_PATH)
 
 firebase_admin.initialize_app(cred)
 
