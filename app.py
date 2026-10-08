@@ -9,6 +9,7 @@ import joblib
 from transformers import BertTokenizerFast, BertForSequenceClassification
 from huggingface_hub import hf_hub_download
 
+#my Flask application, which provides the API endpoints such as /predict and /health
 app = Flask(__name__)
 
 # ============================================================
@@ -39,10 +40,11 @@ db = firestore.client()
 # Hugging Face model
 # ============================================================
 
+#loading my emotion model
+
 MODEL_PATH = "Hasandi/nutrimind-emotion-model"
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
-
 
 # ============================================================
 # Load model once
@@ -102,7 +104,16 @@ def predict_emotion(text):
         for key, value in inputs.items()
     }
 
-    with torch.no_grad():
+    #with torch.no_grad():
+
+        #outputs = model(**inputs)
+
+        #probabilities = torch.softmax(
+           # outputs.logits,
+           # dim=1
+       # )
+
+    with torch.inference_mode():
 
         outputs = model(**inputs)
 
@@ -110,6 +121,8 @@ def predict_emotion(text):
             outputs.logits,
             dim=1
         )
+
+
 
         # Get predicted emotion
         pred = torch.argmax(
@@ -120,9 +133,22 @@ def predict_emotion(text):
         # Get confidence of predicted emotion
         confidence = probabilities[0][pred].item()
 
+    #emotion = str(labels[pred])
+
+    #return emotion, float(confidence)
+
+        # Create complete probability distribution
+        probability_distribution = {
+            str(labels[index]): round(
+                probabilities[0][index].item(),
+                4
+            )
+            for index in range(len(labels))
+        }
+
     emotion = str(labels[pred])
 
-    return emotion, float(confidence)
+    return emotion, float(confidence), probability_distribution
 
 
 # ============================================================
@@ -256,7 +282,8 @@ def predict():
     # Predict emotion
     # --------------------------------------------------------
 
-    emotion, confidence = predict_emotion(text)
+    #emotion, confidence = predict_emotion(text)
+    emotion, confidence, probability_distribution = predict_emotion(text)
 
 
     # --------------------------------------------------------
@@ -280,6 +307,8 @@ def predict():
         "emotion": emotion,
 
         "confidence": round(confidence, 4),
+
+        "probabilities": probability_distribution,
 
         "suggestion": suggestion
 
